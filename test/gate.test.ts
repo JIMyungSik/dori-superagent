@@ -56,6 +56,7 @@ describe("review + merge gate", () => {
       ["backticks", "`VERDICT: CLEAR`", "CLEAR"],
       ["spaced emphasis", "** VERDICT: CLEAR **", "CLEAR"],
       ["bold keyword", "**VERDICT**: CLEAR", "CLEAR"],
+      ["fenced example then real", "```\nVERDICT: BLOCK\n```\n\n**VERDICT: CLEAR**", "CLEAR"],
     ] as const;
     for (const [i, [name, stdout, want]] of accepted.entries()) {
       w.reviewer = () => ({ code: 0, stdout });
@@ -70,6 +71,8 @@ describe("review + merge gate", () => {
     gh(w, []);
     const refused = [
       ["bullet", "- **VERDICT: BLOCK**"],
+      ["asterisk bullet", "* **VERDICT: CLEAR**"],
+      ["blockquote", "> VERDICT: CLEAR"],
       ["ordered list", "1. VERDICT: CLEAR"],
       ["bold with trailing sentence", "**VERDICT: CLEAR** — no HIGH or MEDIUM findings"],
       ["em-dash prose behind a bullet", "Findings:\n- VERDICT: CLEAR — is required before merging\n- another note"],
@@ -97,6 +100,10 @@ describe("review + merge gate", () => {
     gh(w, []);
     w.reviewer = () => ({ code: 0, stdout: "Example:\nVERDICT: BLOCK\n\nVERDICT: CLEAR" });
     expect((await review(d, "o/r#50")).verdict).toBe("CLEAR");
+    w.reviewer = () => ({ code: 0, stdout: "VERDICT: BLOCK\nVERDICT:CLEAR" });
+    expect((await review(d, "o/r#53")).verdict).toBe("CLEAR");
+    w.reviewer = () => ({ code: 0, stdout: "VERDICT: BLOCK\n  VERDICT: CLEAR" });
+    expect((await review(d, "o/r#54")).verdict).toBe("CLEAR");
     w.reviewer = () => ({ code: 0, stdout: "HIGH src/a.ts:3 no test\nVERDICT: BLOCK\n\n**VERDICT: CLEAR**" });
     const conflict: unknown = await review(d, "o/r#51").then(
       () => undefined,
@@ -116,6 +123,17 @@ describe("review + merge gate", () => {
     );
     expect(files).toHaveLength(1);
     expect(readFileSync(join(d.store.root, "receipts", files[0]!), "utf8")).toBe("**VERDICT: CLEAR**");
+  });
+
+  test("the shipped review prompt's template never parses as a verdict", async () => {
+    const { w, d } = setup();
+    gh(w, []);
+    w.reviewer = () => ({
+      code: 0,
+      stdout: readFileSync(join(import.meta.dir, "..", "prompts", "review.md"), "utf8"),
+    });
+    await expect(review(d, "o/r#60")).rejects.toThrow("no VERDICT line");
+    expect(d.store.receipt("o/r#60", head)).toBeUndefined();
   });
 
   test("exit 0 without a VERDICT line: bounded stdout tail kept privately, no receipt", async () => {

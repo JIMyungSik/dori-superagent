@@ -28,22 +28,30 @@ export async function headSha(d: Deps, pr: PrRef): Promise<string> {
 type Verdict = "CLEAR" | "BLOCK";
 type VerdictScan = { kind: "none" } | { kind: "verdict"; verdict: Verdict } | { kind: "ambiguous"; values: Verdict[] };
 
-/** True when the raw line is not the canonical undecorated `VERDICT: CLEAR|BLOCK` form. */
-const isDecorated = (raw: string, verdict: Verdict): boolean => raw.trimEnd() !== `VERDICT: ${verdict}`;
+/** True when markdown emphasis or backticks decorate the line; whitespace and colon spacing alone do not. */
+const isDecorated = (raw: string): boolean => /[`*_]/.test(raw);
+
+/** Whitespace and optional markdown emphasis may surround `VERDICT` and its value; a lone `*`/`_` only when glued. */
+const VERDICT_LINE =
+  /^\s*(?:\*\*|__|`|\*(?=\S)|_(?=\S))?\s*VERDICT\s*(?:\*\*|__|`|(?<=\S)[*_])?\s*:\s*(?:\*\*|__|`|\*(?=\S)|_(?=\S))?\s*(CLEAR|BLOCK)\s*(?:\*\*|__|`|(?<=\S)[*_])?\s*$/;
 
 /**
- * A verdict is the whole line: after surrounding markdown emphasis and outer whitespace are removed, only
- * `VERDICT: CLEAR` or `VERDICT: BLOCK` may remain. A bullet or list marker, or trailing prose, disqualifies the line.
- * Among agreeing lines, or among plain lines only, the last wins; when a plain and a decorated line disagree the
- * stream is ambiguous and no receipt is written.
+ * A verdict is the whole line: only whitespace and markdown emphasis may surround `VERDICT: CLEAR|BLOCK`. Bullets, list
+ * markers, blockquotes and trailing prose disqualify the line, and fenced examples are skipped. Among agreeing lines,
+ * or among plain lines only, the last wins; when a plain and a decorated line disagree the stream is ambiguous and no
+ * receipt is written.
  */
 function scanVerdicts(stdout: string): VerdictScan {
   const lines: { verdict: Verdict; decorated: boolean }[] = [];
+  let fenced = false;
   for (const raw of stdout.split(/\r?\n/)) {
-    const m = /^VERDICT\s*:\s*(CLEAR|BLOCK)$/.exec(raw.replace(/[`*_]/g, "").trim());
-    if (!m) continue;
-    const verdict = m[1] as Verdict;
-    lines.push({ verdict, decorated: isDecorated(raw, verdict) });
+    if (/^\s*(?:```|~~~)/.test(raw)) {
+      fenced = !fenced;
+      continue;
+    }
+    if (fenced) continue;
+    const m = VERDICT_LINE.exec(raw);
+    if (m) lines.push({ verdict: m[1] as Verdict, decorated: isDecorated(raw) });
   }
   if (lines.length === 0) return { kind: "none" };
   const values = [...new Set(lines.map((l) => l.verdict))];
