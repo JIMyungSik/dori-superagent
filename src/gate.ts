@@ -28,35 +28,47 @@ export async function headSha(d: Deps, pr: PrRef): Promise<string> {
 type Verdict = "CLEAR" | "BLOCK";
 type VerdictScan = { kind: "none" } | { kind: "verdict"; verdict: Verdict } | { kind: "ambiguous"; values: Verdict[] };
 
-/** True when markdown emphasis or backticks decorate the line; whitespace and colon spacing alone do not. */
-const isDecorated = (raw: string): boolean => /[`*_]/.test(raw);
+/** The original contract: a column-zero line, trailing rationale allowed (`VERDICT: CLEAR — 4 LOW findings`). */
+const PLAIN_VERDICT = /^VERDICT:\s*(CLEAR|BLOCK)(?![A-Za-z0-9])(?![_-][A-Za-z0-9])/;
+
+/** The incident's shape: nothing but the verdict once markdown emphasis and backticks are removed. */
+const EMPHASISED_VERDICT = /^VERDICT\s*:\s*(CLEAR|BLOCK)$/;
 
 /** A bullet, list, or blockquote marker never introduces a verdict, even when its mark could pass as emphasis. */
 const MARKER = /^\s*(?:[-+]|\*|\d+[.)]|>)\s/;
 
 /**
- * A verdict is a whole line of its own: after markdown emphasis, backticks and outer whitespace are removed, only
- * `VERDICT: CLEAR` or `VERDICT: BLOCK` may remain. Bullet/list/blockquote markers, four-space code blocks, fenced
- * examples and trailing text disqualify the line. Among agreeing lines, or among plain lines only, the last wins;
- * when a plain and a decorated line disagree the stream is ambiguous and no receipt is written.
+ * Two compatible shapes: the original column-zero `VERDICT: CLEAR|BLOCK` line (trailing rationale included), and a
+ * whole line that is only that verdict wrapped in markdown emphasis or backticks. Indented lines, bullets, blockquotes
+ * and fenced examples never count. Plain lines keep legacy last-match; plain and emphasised lines that disagree are
+ * ambiguous and write no receipt.
  */
 function scanVerdicts(stdout: string): VerdictScan {
-  const lines: { verdict: Verdict; decorated: boolean }[] = [];
+  const plain: Verdict[] = [];
+  const emphasised: Verdict[] = [];
   let fenced = false;
   for (const raw of stdout.split(/\r?\n/)) {
     if (/^\s*(?:```|~~~)/.test(raw)) {
       fenced = !fenced;
       continue;
     }
-    if (fenced || MARKER.test(raw) || /^(?:\t| {4})/.test(raw)) continue;
-    const m = /^VERDICT\s*:\s*(CLEAR|BLOCK)$/.exec(raw.replace(/[`*_]/g, "").trim());
-    if (m) lines.push({ verdict: m[1] as Verdict, decorated: isDecorated(raw) });
+    if (fenced || MARKER.test(raw) || /^\s/.test(raw)) continue;
+    const p = PLAIN_VERDICT.exec(raw);
+    if (p) {
+      plain.push(p[1] as Verdict);
+      continue;
+    }
+    const e = EMPHASISED_VERDICT.exec(raw.replace(/[`*_]/g, "").trim());
+    if (e && /[`*_]/.test(raw)) emphasised.push(e[1] as Verdict);
   }
-  if (lines.length === 0) return { kind: "none" };
-  const values = [...new Set(lines.map((l) => l.verdict))];
-  if (values.length === 1) return { kind: "verdict", verdict: values[0]! };
-  if (lines.every((l) => !l.decorated)) return { kind: "verdict", verdict: lines.at(-1)!.verdict };
-  return { kind: "ambiguous", values };
+  if (plain.length === 0 && emphasised.length === 0) return { kind: "none" };
+  if (emphasised.length === 0) return { kind: "verdict", verdict: plain.at(-1)! };
+  if (plain.length === 0) {
+    const values = [...new Set(emphasised)];
+    return values.length === 1 ? { kind: "verdict", verdict: values[0]! } : { kind: "ambiguous", values };
+  }
+  const values = [...new Set([...plain, ...emphasised])];
+  return values.length === 1 ? { kind: "verdict", verdict: values[0]! } : { kind: "ambiguous", values };
 }
 
 /** Runs a fresh, non-interactive reviewer session pinned to the PR head and records its verdict as a receipt. */

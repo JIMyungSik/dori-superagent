@@ -46,13 +46,14 @@ describe("review + merge gate", () => {
     expect(w.usage.filter((e) => e.name === "dori.review_completed")).toHaveLength(2);
   });
 
-  test("verdict lines survive indentation and markdown emphasis; the value must end the line", async () => {
+  test("legacy plain lines and whole-line emphasis are accepted", async () => {
     const { w, d } = setup();
     gh(w, []);
     const accepted = [
       ["plain", "no findings\nVERDICT: CLEAR", "CLEAR"],
+      ["legacy rationale", "VERDICT: CLEAR — 4 LOW findings", "CLEAR"],
+      ["legacy parenthetical", "VERDICT: BLOCK   (at least one HIGH finding)", "BLOCK"],
       ["bold", "**VERDICT: CLEAR**", "CLEAR"],
-      ["indented", "  VERDICT: BLOCK", "BLOCK"],
       ["backticks", "`VERDICT: CLEAR`", "CLEAR"],
       ["spaced emphasis", "** VERDICT: CLEAR **", "CLEAR"],
       ["bold keyword", "**VERDICT**: CLEAR", "CLEAR"],
@@ -68,7 +69,7 @@ describe("review + merge gate", () => {
     }
   });
 
-  test("list markers, trailing prose and prose mentions never decide", async () => {
+  test("markers, indentation, trailing prose and prose mentions never decide", async () => {
     const { w, d } = setup();
     gh(w, []);
     const refused = [
@@ -76,6 +77,8 @@ describe("review + merge gate", () => {
       ["asterisk bullet", "* **VERDICT: CLEAR**"],
       ["blockquote", "> VERDICT: CLEAR"],
       ["ordered list", "1. VERDICT: CLEAR"],
+      ["indented", "  VERDICT: CLEAR"],
+      ["indented code block", "    VERDICT: CLEAR"],
       ["bold with trailing sentence", "**VERDICT: CLEAR** — no HIGH or MEDIUM findings"],
       ["em-dash prose behind a bullet", "Findings:\n- VERDICT: CLEAR — is required before merging\n- another note"],
       ["prose mention", "I cannot give a VERDICT: CLEAR without a diff."],
@@ -106,7 +109,7 @@ describe("review + merge gate", () => {
     w.reviewer = () => ({ code: 0, stdout: "VERDICT: BLOCK\nVERDICT:CLEAR" });
     expect((await review(d, "o/r#53")).verdict).toBe("CLEAR");
     w.reviewer = () => ({ code: 0, stdout: "VERDICT: BLOCK\n  VERDICT: CLEAR" });
-    expect((await review(d, "o/r#54")).verdict).toBe("CLEAR");
+    expect((await review(d, "o/r#54")).verdict).toBe("BLOCK");
     w.reviewer = () => ({
       code: 0,
       stdout: "HIGH a.ts:1\nVERDICT: BLOCK\n\nExample of the required line:\n\n    VERDICT: CLEAR",

@@ -153,7 +153,7 @@ describe("reviewCommand and DORI_PROMPTS_DIR", () => {
     w.reviewer = () => ({ code: 0, stdout: "no verdict here" });
     await expect(review(d, "o/r#5")).rejects.toThrow("reviewer printed no VERDICT line");
     w.reviewer = () => ({ code: 0, stdout: "VERDICT: CLEAR — 4 LOW findings" });
-    await expect(review(d, "o/r#6")).rejects.toThrow("reviewer printed no VERDICT line");
+    expect((await review(d, "o/r#6")).verdict).toBe("CLEAR");
   });
 
   test("DORI_PROMPTS_DIR overrides prompt() and the prompts dori up renders", async () => {
