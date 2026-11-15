@@ -46,17 +46,16 @@ describe("review + merge gate", () => {
     expect(w.usage.filter((e) => e.name === "dori.review_completed")).toHaveLength(2);
   });
 
-  test("verdict lines survive indentation, bullets, emphasis and trailing text; prose alone never decides", async () => {
+  test("verdict lines survive indentation and markdown emphasis; the value must end the line", async () => {
     const { w, d } = setup();
     gh(w, []);
     const accepted = [
       ["plain", "no findings\nVERDICT: CLEAR", "CLEAR"],
       ["bold", "**VERDICT: CLEAR**", "CLEAR"],
-      ["indented bullet", "\t- **VERDICT: BLOCK**", "BLOCK"],
-      ["bold with trailing sentence", "**VERDICT: CLEAR** — no HIGH or MEDIUM findings", "CLEAR"],
+      ["indented", "\tVERDICT: BLOCK", "BLOCK"],
+      ["backticks", "`VERDICT: CLEAR`", "CLEAR"],
       ["spaced emphasis", "** VERDICT: CLEAR **", "CLEAR"],
-      ["ordered list", "1. VERDICT: BLOCK", "BLOCK"],
-      ["quoted example then real", "Example: `VERDICT: BLOCK`\n\n**VERDICT: CLEAR**", "CLEAR"],
+      ["bold keyword", "**VERDICT**: CLEAR", "CLEAR"],
     ] as const;
     for (const [i, [name, stdout, want]] of accepted.entries()) {
       w.reviewer = () => ({ code: 0, stdout });
@@ -64,29 +63,21 @@ describe("review + merge gate", () => {
       expect({ name, verdict: (await review(d, pr)).verdict }).toEqual({ name, verdict: want });
       expect(d.store.receipt(pr, head)?.verdict).toBe(want);
     }
-    w.reviewer = () => ({ code: 0, stdout: "I cannot give a VERDICT: CLEAR without a diff." });
-    await expect(review(d, "o/r#30")).rejects.toThrow("no VERDICT line");
-    expect(d.store.receipt("o/r#30", head)).toBeUndefined();
   });
 
-  test("prose that mentions a verdict and disagreeing formats are refused", async () => {
+  test("list markers, trailing prose and prose mentions never decide", async () => {
     const { w, d } = setup();
     gh(w, []);
     const refused = [
-      [
-        "prose after the value",
-        "Findings:\n- VERDICT: CLEAR is required before merging\n- the gate reads the last line",
-        "no VERDICT line",
-      ],
-      [
-        "plain then decorated conflict",
-        "HIGH src/a.ts:3 no test\nVERDICT: BLOCK\n\nWhat would change my verdict:\n**VERDICT: CLEAR**",
-        "conflicting verdicts (BLOCK and CLEAR)",
-      ],
-      ["word continues", "VERDICT: CLEARLY", "no VERDICT line"],
-      ["hyphen continues", "VERDICT: CLEAR-ISH", "no VERDICT line"],
+      ["bullet", "- **VERDICT: BLOCK**"],
+      ["ordered list", "1. VERDICT: CLEAR"],
+      ["bold with trailing sentence", "**VERDICT: CLEAR** — no HIGH or MEDIUM findings"],
+      ["em-dash prose behind a bullet", "Findings:\n- VERDICT: CLEAR — is required before merging\n- another note"],
+      ["prose mention", "I cannot give a VERDICT: CLEAR without a diff."],
+      ["word continues", "VERDICT: CLEARLY"],
+      ["hyphen continues", "VERDICT: CLEAR-ISH"],
     ] as const;
-    for (const [i, [name, stdout, message]] of refused.entries()) {
+    for (const [i, [name, stdout]] of refused.entries()) {
       w.reviewer = () => ({ code: 0, stdout });
       const pr = `o/r#${40 + i}`;
       const failure: unknown = await review(d, pr).then(
@@ -95,25 +86,34 @@ describe("review + merge gate", () => {
       );
       expect({ name, error: failure instanceof Error ? failure.message : "" }).toEqual({
         name,
-        error: expect.stringContaining(message),
+        error: expect.stringContaining("no VERDICT line"),
       });
       expect(d.store.receipt(pr, head)).toBeUndefined();
     }
   });
 
-  test("plain verdict lines keep last-match; a verdict on a nonzero exit writes no receipt", async () => {
+  test("plain lines keep last-match; a plain/decorated conflict and a nonzero exit never write a receipt", async () => {
     const { w, d } = setup();
     gh(w, []);
-    w.reviewer = () => ({ code: 0, stdout: "VERDICT: BLOCK\nVERDICT: CLEAR" });
+    w.reviewer = () => ({ code: 0, stdout: "Example:\nVERDICT: BLOCK\n\nVERDICT: CLEAR" });
     expect((await review(d, "o/r#50")).verdict).toBe("CLEAR");
+    w.reviewer = () => ({ code: 0, stdout: "HIGH src/a.ts:3 no test\nVERDICT: BLOCK\n\n**VERDICT: CLEAR**" });
+    const conflict: unknown = await review(d, "o/r#51").then(
+      () => undefined,
+      (e: unknown) => e,
+    );
+    expect(conflict instanceof Error ? conflict.message : "").toContain("conflicting verdicts (BLOCK and CLEAR)");
+    expect(d.store.receipt("o/r#51", head)).toBeUndefined();
     w.reviewer = () => ({ code: 9, stdout: "**VERDICT: CLEAR**" });
-    const failure: unknown = await review(d, "o/r#51").then(
+    const failure: unknown = await review(d, "o/r#52").then(
       () => undefined,
       (e: unknown) => e,
     );
     expect(failure instanceof Error ? failure.message : "").toContain("reviewer exited 9");
-    expect(d.store.receipt("o/r#51", head)).toBeUndefined();
-    const files = readdirSync(join(d.store.root, "receipts")).filter((n) => n.endsWith(".noverdict.txt"));
+    expect(d.store.receipt("o/r#52", head)).toBeUndefined();
+    const files = readdirSync(join(d.store.root, "receipts")).filter(
+      (n) => n.endsWith(".noverdict.txt") && n.startsWith("o__r_52@"),
+    );
     expect(files).toHaveLength(1);
     expect(readFileSync(join(d.store.root, "receipts", files[0]!), "utf8")).toBe("**VERDICT: CLEAR**");
   });

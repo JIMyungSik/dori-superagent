@@ -29,25 +29,21 @@ type Verdict = "CLEAR" | "BLOCK";
 type VerdictScan = { kind: "none" } | { kind: "verdict"; verdict: Verdict } | { kind: "ambiguous"; values: Verdict[] };
 
 /** True when the raw line is not the canonical undecorated `VERDICT: CLEAR|BLOCK` form. */
-const isDecorated = (raw: string): boolean => !/^VERDICT\s*:\s*(CLEAR|BLOCK)/.test(raw);
+const isDecorated = (raw: string, verdict: Verdict): boolean => raw.trimEnd() !== `VERDICT: ${verdict}`;
 
 /**
- * Verdict lines may be indented, bulleted, or markdown-emphasised, but the keyword must open the line and the value
- * must end it: `VERDICT: CLEAR is required` is prose, not a verdict. Among agreeing lines, and among plain lines only,
- * the last one wins; when decorated and plain lines disagree the stream is ambiguous and no receipt is written.
+ * A verdict is the whole line: after surrounding markdown emphasis and outer whitespace are removed, only
+ * `VERDICT: CLEAR` or `VERDICT: BLOCK` may remain. A bullet or list marker, or trailing prose, disqualifies the line.
+ * Among agreeing lines, or among plain lines only, the last wins; when a plain and a decorated line disagree the
+ * stream is ambiguous and no receipt is written.
  */
 function scanVerdicts(stdout: string): VerdictScan {
   const lines: { verdict: Verdict; decorated: boolean }[] = [];
   for (const raw of stdout.split(/\r?\n/)) {
-    const line = raw
-      .replace(/[`*_]/g, "")
-      .replace(/^[\s>]*(?:(?:[-+]|\d+[.)])[\s>]+)*/, "")
-      .trimStart();
-    const m = /^VERDICT\s*:\s*(CLEAR|BLOCK)(?![A-Za-z0-9])(?![_-][A-Za-z0-9])(.*)$/.exec(line);
+    const m = /^VERDICT\s*:\s*(CLEAR|BLOCK)$/.exec(raw.replace(/[`*_]/g, "").trim());
     if (!m) continue;
-    const rest = m[2]!.trimStart();
-    if (rest !== "" && !/^[—–:.,(\[]/.test(rest)) continue;
-    lines.push({ verdict: m[1] as Verdict, decorated: isDecorated(raw) });
+    const verdict = m[1] as Verdict;
+    lines.push({ verdict, decorated: isDecorated(raw, verdict) });
   }
   if (lines.length === 0) return { kind: "none" };
   const values = [...new Set(lines.map((l) => l.verdict))];
