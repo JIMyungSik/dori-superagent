@@ -25,18 +25,35 @@ export async function headSha(d: Deps, pr: PrRef): Promise<string> {
   return String(out.headRefOid);
 }
 
+type Verdict = "CLEAR" | "BLOCK";
+type VerdictScan = { kind: "none" } | { kind: "verdict"; verdict: Verdict } | { kind: "ambiguous"; values: Verdict[] };
+
+/** True when the raw line is not the canonical undecorated `VERDICT: CLEAR|BLOCK` form. */
+const isDecorated = (raw: string): boolean => !/^VERDICT\s*:\s*(CLEAR|BLOCK)/.test(raw);
+
 /**
- * A verdict line may be indented, bulleted, or wrapped in markdown emphasis, but the keyword must still open the
- * line: a CLEAR or BLOCK inside prose never counts. The last matching line wins, so a quoted example cannot decide.
+ * Verdict lines may be indented, bulleted, or markdown-emphasised, but the keyword must open the line and the value
+ * must end it: `VERDICT: CLEAR is required` is prose, not a verdict. Among agreeing lines, and among plain lines only,
+ * the last one wins; when decorated and plain lines disagree the stream is ambiguous and no receipt is written.
  */
-function verdictIn(stdout: string): "CLEAR" | "BLOCK" | undefined {
-  let verdict: "CLEAR" | "BLOCK" | undefined;
+function scanVerdicts(stdout: string): VerdictScan {
+  const lines: { verdict: Verdict; decorated: boolean }[] = [];
   for (const raw of stdout.split(/\r?\n/)) {
-    const line = raw.replace(/^[\s>]*(?:[-*+][\s>]+)*/, "").replace(/[`*_]/g, "");
-    const m = /^VERDICT\s*:\s*(CLEAR|BLOCK)(?![A-Za-z0-9])(?![_-][A-Za-z0-9])/.exec(line);
-    if (m) verdict = m[1] as "CLEAR" | "BLOCK";
+    const line = raw
+      .replace(/[`*_]/g, "")
+      .replace(/^[\s>]*(?:(?:[-+]|\d+[.)])[\s>]+)*/, "")
+      .trimStart();
+    const m = /^VERDICT\s*:\s*(CLEAR|BLOCK)(?![A-Za-z0-9])(?![_-][A-Za-z0-9])(.*)$/.exec(line);
+    if (!m) continue;
+    const rest = m[2]!.trimStart();
+    if (rest !== "" && !/^[—–:.,(\[]/.test(rest)) continue;
+    lines.push({ verdict: m[1] as Verdict, decorated: isDecorated(raw) });
   }
-  return verdict;
+  if (lines.length === 0) return { kind: "none" };
+  const values = [...new Set(lines.map((l) => l.verdict))];
+  if (values.length === 1) return { kind: "verdict", verdict: values[0]! };
+  if (lines.every((l) => !l.decorated)) return { kind: "verdict", verdict: lines.at(-1)!.verdict };
+  return { kind: "ambiguous", values };
 }
 
 /** Runs a fresh, non-interactive reviewer session pinned to the PR head and records its verdict as a receipt. */
@@ -55,18 +72,20 @@ export async function review(
     ? substitute(hook, { ...vars, text })
     : [d.agentCmd, "-p", "--no-session", ...(model ? ["--model", model] : []), text];
   const res = await d.exec(cmd ?? d.agentCmd, argv);
-  const verdict = verdictIn(res.stdout);
-  if (!verdict) {
+  const scan = scanVerdicts(res.stdout);
+  if (res.code !== 0 || scan.kind !== "verdict") {
     const name = `${pr.id.replaceAll("/", "__").replace("#", "_")}@${sha}-${randomUUID()}.noverdict.txt`;
     const diagnostic = join(d.store.root, "receipts", name);
     writeFileSync(diagnostic, res.stdout.split(/\r?\n/).slice(-200).join("\n"), { flag: "wx", mode: 0o600 });
     const reason =
-      res.code === 0
-        ? "reviewer printed no VERDICT line"
-        : `reviewer exited ${res.code}: ${res.stderr.trim() || "no VERDICT line in its output"}`;
+      res.code !== 0
+        ? `reviewer exited ${res.code}${res.stderr.trim() ? `: ${res.stderr.trim()}` : ""}`
+        : scan.kind === "ambiguous"
+          ? `reviewer printed conflicting verdicts (${scan.values.join(" and ")})`
+          : "reviewer printed no VERDICT line";
     throw new Error(`${reason}; no receipt written; reviewer output saved to ${diagnostic}`);
   }
-  if (res.code !== 0) throw new Error(`reviewer exited ${res.code}: ${res.stderr.trim()}`);
+  const verdict = scan.verdict;
   d.store.saveReceipt({
     pr: pr.id,
     sha,
