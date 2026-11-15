@@ -10,4 +10,5 @@ List each finding as: severity (HIGH/MEDIUM/LOW), file:line, problem, fix.
 Then print exactly one final line:
 VERDICT: CLEAR   (no HIGH or MEDIUM findings)
 VERDICT: BLOCK   (at least one HIGH or MEDIUM finding)
+The line may be indented, bulleted, or wrapped in markdown emphasis; that is harmless.
 Do not modify any files.

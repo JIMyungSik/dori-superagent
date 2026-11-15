@@ -25,6 +25,20 @@ export async function headSha(d: Deps, pr: PrRef): Promise<string> {
   return String(out.headRefOid);
 }
 
+/**
+ * A verdict line may be indented, bulleted, or wrapped in markdown emphasis, but the keyword must still open the
+ * line: a CLEAR or BLOCK inside prose never counts. The last matching line wins, so a quoted example cannot decide.
+ */
+function verdictIn(stdout: string): "CLEAR" | "BLOCK" | undefined {
+  let verdict: "CLEAR" | "BLOCK" | undefined;
+  for (const raw of stdout.split(/\r?\n/)) {
+    const line = raw.replace(/^[\s>]*(?:[-*+][\s>]+)*/, "").replace(/[`*_]/g, "");
+    const m = /^VERDICT\s*:\s*(CLEAR|BLOCK)(?![A-Za-z0-9])(?![_-][A-Za-z0-9])/.exec(line);
+    if (m) verdict = m[1] as "CLEAR" | "BLOCK";
+  }
+  return verdict;
+}
+
 /** Runs a fresh, non-interactive reviewer session pinned to the PR head and records its verdict as a receipt. */
 export async function review(
   d: Deps,
@@ -41,9 +55,8 @@ export async function review(
     ? substitute(hook, { ...vars, text })
     : [d.agentCmd, "-p", "--no-session", ...(model ? ["--model", model] : []), text];
   const res = await d.exec(cmd ?? d.agentCmd, argv);
-  const verdicts = [...res.stdout.matchAll(/^VERDICT:\s*(CLEAR|BLOCK)\b/gm)];
-  const last = verdicts.at(-1);
-  if (!last) {
+  const verdict = verdictIn(res.stdout);
+  if (!verdict) {
     const name = `${pr.id.replaceAll("/", "__").replace("#", "_")}@${sha}-${randomUUID()}.noverdict.txt`;
     const diagnostic = join(d.store.root, "receipts", name);
     writeFileSync(diagnostic, res.stdout.split(/\r?\n/).slice(-200).join("\n"), { flag: "wx", mode: 0o600 });
@@ -54,7 +67,6 @@ export async function review(
     throw new Error(`${reason}; no receipt written; reviewer output saved to ${diagnostic}`);
   }
   if (res.code !== 0) throw new Error(`reviewer exited ${res.code}: ${res.stderr.trim()}`);
-  const verdict = last[1] as "CLEAR" | "BLOCK";
   d.store.saveReceipt({
     pr: pr.id,
     sha,

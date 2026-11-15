@@ -46,6 +46,27 @@ describe("review + merge gate", () => {
     expect(w.usage.filter((e) => e.name === "dori.review_completed")).toHaveLength(2);
   });
 
+  test("verdict lines survive indentation, bullets, emphasis and trailing text; prose alone never decides", async () => {
+    const { w, d } = setup();
+    gh(w, []);
+    const accepted = [
+      ["plain", "no findings\nVERDICT: CLEAR", "CLEAR"],
+      ["bold", "**VERDICT: CLEAR**", "CLEAR"],
+      ["indented bullet", "\t- **VERDICT: BLOCK**", "BLOCK"],
+      ["bold with trailing sentence", "**VERDICT: CLEAR** — no HIGH or MEDIUM findings", "CLEAR"],
+      ["quoted example then real", "Example: `VERDICT: BLOCK`\n\n**VERDICT: CLEAR**", "CLEAR"],
+    ] as const;
+    for (const [i, [name, stdout, want]] of accepted.entries()) {
+      w.reviewer = () => ({ code: 0, stdout });
+      const pr = `o/r#${20 + i}`;
+      expect({ name, verdict: (await review(d, pr)).verdict }).toEqual({ name, verdict: want });
+      expect(d.store.receipt(pr, head)?.verdict).toBe(want);
+    }
+    w.reviewer = () => ({ code: 0, stdout: "I cannot give a VERDICT: CLEAR without a diff." });
+    await expect(review(d, "o/r#30")).rejects.toThrow("no VERDICT line");
+    expect(d.store.receipt("o/r#30", head)).toBeUndefined();
+  });
+
   test("exit 0 without a VERDICT line: bounded stdout tail kept privately, no receipt", async () => {
     const { w, d } = setup();
     gh(w, []);
