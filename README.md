@@ -170,13 +170,13 @@ A lane that has not reported for 10 minutes, and whose pane is not working, gets
 
 ### Merge needs a CLEAR receipt at the exact head and green checks
 
-`dori merge` reads the PR's head SHA with `gh`, then requires a receipt for that SHA in `~/.dori/receipts/` with verdict `CLEAR`. Only `dori review` writes receipts: it runs a fresh non-interactive omo on `prompts/review.md` pinned to that SHA, and when the reviewer prints no line that is exactly `VERDICT: CLEAR` or `VERDICT: BLOCK` (after indentation and markdown emphasis are trimmed), no receipt is written. A plain and an emphasised verdict that disagree are ambiguous, and no receipt is written either.
+`dori merge` reads the PR's head SHA with `gh`, then requires a receipt for that SHA in `~/.dori/receipts/` with verdict `CLEAR`. Only `dori review` writes receipts: it runs a fresh non-interactive omo on `prompts/review.md` pinned to that SHA, and when the reviewer prints no line that is exactly `VERDICT: CLEAR` or `VERDICT: BLOCK` once markdown emphasis and outer whitespace are removed (a bullet or list marker, a four-space code block, or trailing text disqualifies the line), no receipt is written. Conflicting verdicts write no receipt, unless every verdict line is plain, in which case the last one wins.
 
 Then `gh pr checks` must return at least one check, every check must be `pass` or `skipping`, and at least one must be `pass`. An empty check list is refused with "an empty check list is never green". A push after the review changes the head SHA, so the receipt no longer matches and `dori review` has to run again.
 
 ### Hooks for your own tooling
 
-`$DORI_HOME/config.json` may name argv templates under `hooks`: `onReady`, `onReport` and `onLost` run in the background when those events happen (with `{key}`, `{text}` and `{evidence}` filled in per argument), and `reviewCommand` replaces the built-in reviewer as long as it prints the same whole-line `VERDICT: CLEAR` or `VERDICT: BLOCK`. `DORI_PROMPTS_DIR` points the harness at your own copies of the prompts.
+`$DORI_HOME/config.json` may name argv templates under `hooks`: `onReady`, `onReport` and `onLost` run in the background when those events happen (with `{key}`, `{text}` and `{evidence}` filled in per argument), and `reviewCommand` replaces the built-in reviewer as long as it prints the same whole-line `VERDICT: CLEAR` or `VERDICT: BLOCK` (trailing text is not allowed). `DORI_PROMPTS_DIR` points the harness at your own copies of the prompts.
 
 ## Dori mode in depth
 

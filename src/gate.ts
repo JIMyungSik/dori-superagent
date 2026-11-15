@@ -31,15 +31,14 @@ type VerdictScan = { kind: "none" } | { kind: "verdict"; verdict: Verdict } | { 
 /** True when markdown emphasis or backticks decorate the line; whitespace and colon spacing alone do not. */
 const isDecorated = (raw: string): boolean => /[`*_]/.test(raw);
 
-/** Whitespace and optional markdown emphasis may surround `VERDICT` and its value; a lone `*`/`_` only when glued. */
-const VERDICT_LINE =
-  /^\s*(?:\*\*|__|`|\*(?=\S)|_(?=\S))?\s*VERDICT\s*(?:\*\*|__|`|(?<=\S)[*_])?\s*:\s*(?:\*\*|__|`|\*(?=\S)|_(?=\S))?\s*(CLEAR|BLOCK)\s*(?:\*\*|__|`|(?<=\S)[*_])?\s*$/;
+/** A bullet, list, or blockquote marker never introduces a verdict, even when its mark could pass as emphasis. */
+const MARKER = /^\s*(?:[-+]|\*|\d+[.)]|>)\s/;
 
 /**
- * A verdict is the whole line: only whitespace and markdown emphasis may surround `VERDICT: CLEAR|BLOCK`. Bullets, list
- * markers, blockquotes and trailing prose disqualify the line, and fenced examples are skipped. Among agreeing lines,
- * or among plain lines only, the last wins; when a plain and a decorated line disagree the stream is ambiguous and no
- * receipt is written.
+ * A verdict is a whole line of its own: after markdown emphasis, backticks and outer whitespace are removed, only
+ * `VERDICT: CLEAR` or `VERDICT: BLOCK` may remain. Bullet/list/blockquote markers, four-space code blocks, fenced
+ * examples and trailing text disqualify the line. Among agreeing lines, or among plain lines only, the last wins;
+ * when a plain and a decorated line disagree the stream is ambiguous and no receipt is written.
  */
 function scanVerdicts(stdout: string): VerdictScan {
   const lines: { verdict: Verdict; decorated: boolean }[] = [];
@@ -49,8 +48,8 @@ function scanVerdicts(stdout: string): VerdictScan {
       fenced = !fenced;
       continue;
     }
-    if (fenced) continue;
-    const m = VERDICT_LINE.exec(raw);
+    if (fenced || MARKER.test(raw) || /^(?:\t| {4})/.test(raw)) continue;
+    const m = /^VERDICT\s*:\s*(CLEAR|BLOCK)$/.exec(raw.replace(/[`*_]/g, "").trim());
     if (m) lines.push({ verdict: m[1] as Verdict, decorated: isDecorated(raw) });
   }
   if (lines.length === 0) return { kind: "none" };

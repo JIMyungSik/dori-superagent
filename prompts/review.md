@@ -10,5 +10,5 @@ List each finding as: severity (HIGH/MEDIUM/LOW), file:line, problem, fix.
 Then print exactly one final line, alone on the line, with <CLEAR|BLOCK> replaced by one value:
 VERDICT: <CLEAR|BLOCK>
 Use CLEAR when there is no HIGH or MEDIUM finding, BLOCK otherwise.
-Indentation and markdown emphasis around that line are harmless.
+Markdown emphasis around that line is harmless; nothing else may appear on it.
 Do not modify any files.

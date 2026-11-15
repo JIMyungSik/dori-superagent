@@ -52,10 +52,12 @@ describe("review + merge gate", () => {
     const accepted = [
       ["plain", "no findings\nVERDICT: CLEAR", "CLEAR"],
       ["bold", "**VERDICT: CLEAR**", "CLEAR"],
-      ["indented", "\tVERDICT: BLOCK", "BLOCK"],
+      ["indented", "  VERDICT: BLOCK", "BLOCK"],
       ["backticks", "`VERDICT: CLEAR`", "CLEAR"],
       ["spaced emphasis", "** VERDICT: CLEAR **", "CLEAR"],
       ["bold keyword", "**VERDICT**: CLEAR", "CLEAR"],
+      ["nested emphasis", "**_VERDICT: CLEAR_**", "CLEAR"],
+      ["bold backticks", "**`VERDICT: CLEAR`**", "CLEAR"],
       ["fenced example then real", "```\nVERDICT: BLOCK\n```\n\n**VERDICT: CLEAR**", "CLEAR"],
     ] as const;
     for (const [i, [name, stdout, want]] of accepted.entries()) {
@@ -77,6 +79,7 @@ describe("review + merge gate", () => {
       ["bold with trailing sentence", "**VERDICT: CLEAR** — no HIGH or MEDIUM findings"],
       ["em-dash prose behind a bullet", "Findings:\n- VERDICT: CLEAR — is required before merging\n- another note"],
       ["prose mention", "I cannot give a VERDICT: CLEAR without a diff."],
+      ["heading", "### VERDICT: CLEAR"],
       ["word continues", "VERDICT: CLEARLY"],
       ["hyphen continues", "VERDICT: CLEAR-ISH"],
     ] as const;
@@ -104,6 +107,11 @@ describe("review + merge gate", () => {
     expect((await review(d, "o/r#53")).verdict).toBe("CLEAR");
     w.reviewer = () => ({ code: 0, stdout: "VERDICT: BLOCK\n  VERDICT: CLEAR" });
     expect((await review(d, "o/r#54")).verdict).toBe("CLEAR");
+    w.reviewer = () => ({
+      code: 0,
+      stdout: "HIGH a.ts:1\nVERDICT: BLOCK\n\nExample of the required line:\n\n    VERDICT: CLEAR",
+    });
+    expect((await review(d, "o/r#55")).verdict).toBe("BLOCK");
     w.reviewer = () => ({ code: 0, stdout: "HIGH src/a.ts:3 no test\nVERDICT: BLOCK\n\n**VERDICT: CLEAR**" });
     const conflict: unknown = await review(d, "o/r#51").then(
       () => undefined,

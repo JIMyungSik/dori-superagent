@@ -170,13 +170,13 @@ Eine Lane, die sich 10 Minuten nicht gemeldet hat und deren Pane nicht arbeitet,
 
 ### Merge braucht ein CLEAR-Receipt am exakten Head und grüne Checks
 
-`dori merge` liest mit `gh` die Head-SHA des PRs und verlangt dann für genau diese SHA ein Receipt in `~/.dori/receipts/` mit dem Urteil `CLEAR`. Receipts schreibt nur `dori review`: Es startet ein frisches, nicht interaktives omo auf `prompts/review.md`, festgenagelt auf diese SHA, und wenn der Reviewer keine `VERDICT:`-Zeile ausgibt, wird kein Receipt geschrieben.
+`dori merge` liest mit `gh` die Head-SHA des PRs und verlangt dann für genau diese SHA ein Receipt in `~/.dori/receipts/` mit dem Urteil `CLEAR`. Receipts schreibt nur `dori review`: Es startet ein frisches, nicht interaktives omo auf `prompts/review.md`, festgenagelt auf diese SHA, und wenn der Reviewer keine Zeile ausgibt, die nach Entfernen von Markdown-Hervorhebung und äußeren Leerzeichen genau `VERDICT: CLEAR` oder `VERDICT: BLOCK` ist, wird kein Receipt geschrieben. Aufzählungszeichen, vier Leerzeichen Einrückung (Codeblock) und Text hinter dem Wert zählen nicht. Widersprüchliche Urteile erzeugen kein Receipt; nur wenn alle Urteilszeilen schmucklos sind, gilt die letzte.
 
 Dann muss `gh pr checks` mindestens einen Check liefern, jeder Check muss `pass` oder `skipping` sein, und mindestens einer muss `pass` sein. Eine leere Check-Liste wird abgelehnt mit "an empty check list is never green". Ein Push nach dem Review ändert die Head-SHA, damit passt das Receipt nicht mehr, und `dori review` muss erneut laufen.
 
 ### Hooks für dein eigenes Tooling
 
-`$DORI_HOME/config.json` kann unter `hooks` argv-Vorlagen nennen: `onReady`, `onReport` und `onLost` laufen im Hintergrund, wenn diese Ereignisse eintreten (mit `{key}`, `{text}` und `{evidence}` pro Argument eingesetzt), und `reviewCommand` ersetzt den eingebauten Reviewer, solange es dieselbe `VERDICT:`-Zeile ausgibt. `DORI_PROMPTS_DIR` verweist den Harness auf deine eigenen Kopien der Prompts.
+`$DORI_HOME/config.json` kann unter `hooks` argv-Vorlagen nennen: `onReady`, `onReport` und `onLost` laufen im Hintergrund, wenn diese Ereignisse eintreten (mit `{key}`, `{text}` und `{evidence}` pro Argument eingesetzt), und `reviewCommand` ersetzt den eingebauten Reviewer, solange es dieselbe einzeilige `VERDICT: CLEAR`- oder `VERDICT: BLOCK`-Zeile ausgibt (Text dahinter ist nicht erlaubt). `DORI_PROMPTS_DIR` verweist den Harness auf deine eigenen Kopien der Prompts.
 
 ## Dori mode im Detail
 

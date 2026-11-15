@@ -170,13 +170,13 @@ lead 是唯一和你说话的会话（`prompts/lead.md`）。lane 规则把每�
 
 ### merge 需要精确 head 上的 CLEAR receipt 和全绿的检查
 
-`dori merge` 用 `gh` 读取 PR 的 head SHA，然后要求 `~/.dori/receipts/` 中有一份针对该 SHA、结论为 `CLEAR` 的 receipt。只有 `dori review` 会写 receipt：它基于 `prompts/review.md` 运行一个全新的非交互式 omo，固定在该 SHA 上；如果 reviewer 没有打印 `VERDICT:` 行，就不写 receipt。
+`dori merge` 用 `gh` 读取 PR 的 head SHA，然后要求 `~/.dori/receipts/` 中有一份针对该 SHA、结论为 `CLEAR` 的 receipt。只有 `dori review` 会写 receipt：它基于 `prompts/review.md` 运行一个全新的非交互式 omo，固定在该 SHA 上；如果 reviewer 没有打印一行在去掉 markdown 强调与首尾空白后恰为 `VERDICT: CLEAR` 或 `VERDICT: BLOCK` 的内容，就不写 receipt。项目符号、四空格代码块或行尾附加文字都不算。裁决互相冲突时不写 receipt；只有所有裁决行都是无装饰的纯文本时，以最后一行为准。
 
 接着 `gh pr checks` 必须返回至少一个检查，每个检查都必须是 `pass` 或 `skipping`，且至少一个是 `pass`。空的检查列表会被拒绝，理由是 "an empty check list is never green"。review 之后的 push 会改变 head SHA，receipt 就不再匹配，`dori review` 需要重新运行。
 
 ### 给你自己工具用的 hook
 
-`$DORI_HOME/config.json` 可以在 `hooks` 下指定 argv 模板：`onReady`、`onReport` 和 `onLost` 在对应事件发生时于后台运行（每个参数中的 `{key}`、`{text}` 和 `{evidence}` 会被填入），`reviewCommand` 可以替换内置的 reviewer，只要它打印同样的 `VERDICT:` 行。`DORI_PROMPTS_DIR` 让 harness 使用你自己的提示词副本。
+`$DORI_HOME/config.json` 可以在 `hooks` 下指定 argv 模板：`onReady`、`onReport` 和 `onLost` 在对应事件发生时于后台运行（每个参数中的 `{key}`、`{text}` 和 `{evidence}` 会被填入），`reviewCommand` 可以替换内置的 reviewer，只要它打印同样的整行 `VERDICT: CLEAR` 或 `VERDICT: BLOCK`（不允许行尾附加文字）。`DORI_PROMPTS_DIR` 让 harness 使用你自己的提示词副本。
 
 ## 深入 Dori mode
 

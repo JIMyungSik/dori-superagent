@@ -170,13 +170,13 @@ hcにはワークスペースもタブもありません。Doriはセッショ�
 
 ### マージには正確なheadでのCLEARレシートと緑のチェックが必要
 
-`dori merge` は `gh` でPRのhead SHAを読み、そのSHAに対する判定 `CLEAR` のレシート（receipt）が `~/.dori/receipts/` にあることを求めます。レシートを書くのは `dori review` だけです。`dori review` はそのSHAに固定した新しい非対話のomoを `prompts/review.md` で実行し、レビュアーが `VERDICT:` 行を出力しなければレシートは書かれません。
+`dori merge` は `gh` でPRのhead SHAを読み、そのSHAに対する判定 `CLEAR` のレシート（receipt）が `~/.dori/receipts/` にあることを求めます。レシートを書くのは `dori review` だけです。`dori review` はそのSHAに固定した新しい非対話のomoを `prompts/review.md` で実行し、レビュアーが、markdown 強調と前後の空白を除いて `VERDICT: CLEAR` または `VERDICT: BLOCK` だけになる行を出力しなければレシートは書かれません。箇条書き記号・4スペースのコードブロック・行末の追加テキストは無効です。判定が食い違う場合はレシートを書かず、すべての判定行が装飾なしのときだけ最後の行を採用します。
 
 次に、`gh pr checks` が少なくとも1つのチェックを返し、すべてのチェックが `pass` か `skipping` で、少なくとも1つが `pass` である必要があります。チェック一覧が空なら "an empty check list is never green" として拒否されます。レビュー後にプッシュするとhead SHAが変わるので、レシートが一致しなくなり、`dori review` をもう一度実行する必要があります。
 
 ### 自前のツール用のフック
 
-`$DORI_HOME/config.json` の `hooks` 以下に、argvテンプレートを指定できます。`onReady`、`onReport`、`onLost` はそれぞれのイベントでバックグラウンド実行され、引数ごとに `{key}`、`{text}`、`{evidence}` が埋め込まれます。`reviewCommand` は、同じ `VERDICT:` 行を出力する限り、組み込みのレビュアーの代わりになります。`DORI_PROMPTS_DIR` を使うと、ハーネスが自分用にコピーしたプロンプトを使うようになります。
+`$DORI_HOME/config.json` の `hooks` 以下に、argvテンプレートを指定できます。`onReady`、`onReport`、`onLost` はそれぞれのイベントでバックグラウンド実行され、引数ごとに `{key}`、`{text}`、`{evidence}` が埋め込まれます。`reviewCommand` は、同じ 1 行だけの `VERDICT: CLEAR` または `VERDICT: BLOCK` を出力する限り、組み込みのレビュアーの代わりになります（行末の追加テキストは不可）。`DORI_PROMPTS_DIR` を使うと、ハーネスが自分用にコピーしたプロンプトを使うようになります。
 
 ## Dori modeの詳細
 
