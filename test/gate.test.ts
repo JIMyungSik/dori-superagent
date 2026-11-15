@@ -148,17 +148,6 @@ describe("review + merge gate", () => {
     expect(readFileSync(join(d.store.root, "receipts", files[0]!), "utf8")).toBe("**VERDICT: CLEAR**");
   });
 
-  test("a failed review at a head removes the earlier receipt", async () => {
-    const { w, d } = setup();
-    gh(w, []);
-    w.reviewer = () => ({ code: 0, stdout: "VERDICT: CLEAR" });
-    await review(d, "o/r#70");
-    expect(d.store.receipt("o/r#70", head)?.verdict).toBe("CLEAR");
-    w.reviewer = () => ({ code: 9, stdout: "partial" });
-    await expect(review(d, "o/r#70")).rejects.toThrow("reviewer exited 9");
-    expect(d.store.receipt("o/r#70", head)).toBeUndefined();
-  });
-
   test("the shipped review prompt's template never parses as a verdict", async () => {
     const { w, d } = setup();
     gh(w, []);

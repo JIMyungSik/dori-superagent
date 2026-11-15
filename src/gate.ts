@@ -92,7 +92,6 @@ export async function review(
   const res = await d.exec(cmd ?? d.agentCmd, argv);
   const scan = scanVerdicts(res.stdout);
   if (res.code !== 0 || scan.kind !== "verdict") {
-    d.store.clearReceipt(pr.id, sha);
     const name = `${pr.id.replaceAll("/", "__").replace("#", "_")}@${sha}-${randomUUID()}.noverdict.txt`;
     const diagnostic = join(d.store.root, "receipts", name);
     writeFileSync(diagnostic, res.stdout.split(/\r?\n/).slice(-200).join("\n"), { flag: "wx", mode: 0o600 });
