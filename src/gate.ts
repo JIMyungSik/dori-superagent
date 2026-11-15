@@ -46,13 +46,16 @@ const MARKER = /^\s*(?:[-+]|\*|\d+[.)]|>)\s/;
 function scanVerdicts(stdout: string): VerdictScan {
   const plain: Verdict[] = [];
   const emphasised: Verdict[] = [];
-  let fenced = false;
+  let fence: string | undefined;
   for (const raw of stdout.split(/\r?\n/)) {
-    if (/^\s*(?:```|~~~)/.test(raw)) {
-      fenced = !fenced;
+    const mark = /^\s*(`{3,}|~{3,})/.exec(raw)?.[1];
+    if (mark) {
+      // A fence closes only on the same marker character with at least the opening run's length.
+      if (fence === undefined) fence = mark;
+      else if (mark[0] === fence[0] && mark.length >= fence.length) fence = undefined;
       continue;
     }
-    if (fenced || MARKER.test(raw) || /^\s/.test(raw)) continue;
+    if (fence !== undefined || MARKER.test(raw) || /^\s/.test(raw)) continue;
     const p = PLAIN_VERDICT.exec(raw);
     if (p) {
       plain.push(p[1] as Verdict);
@@ -89,6 +92,7 @@ export async function review(
   const res = await d.exec(cmd ?? d.agentCmd, argv);
   const scan = scanVerdicts(res.stdout);
   if (res.code !== 0 || scan.kind !== "verdict") {
+    d.store.clearReceipt(pr.id, sha);
     const name = `${pr.id.replaceAll("/", "__").replace("#", "_")}@${sha}-${randomUUID()}.noverdict.txt`;
     const diagnostic = join(d.store.root, "receipts", name);
     writeFileSync(diagnostic, res.stdout.split(/\r?\n/).slice(-200).join("\n"), { flag: "wx", mode: 0o600 });

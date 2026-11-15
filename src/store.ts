@@ -151,6 +151,11 @@ export class Store {
     this.writeJson(this.receiptPath(r.pr, r.sha), r);
   }
 
+  /** A failed review at this head must not leave an earlier receipt that the merge gate would still trust. */
+  clearReceipt(pr: string, sha: string): void {
+    rmSync(this.receiptPath(pr, sha), { force: true });
+  }
+
   receipt(pr: string, sha: string): ReviewReceipt | undefined {
     return this.readJson(this.receiptPath(pr, sha));
   }

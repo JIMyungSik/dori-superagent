@@ -10,5 +10,5 @@ List each finding as: severity (HIGH/MEDIUM/LOW), file:line, problem, fix.
 Then print exactly one final line, at the start of the line, with <CLEAR|BLOCK> replaced by one value:
 VERDICT: <CLEAR|BLOCK>
 Use CLEAR when there is no HIGH or MEDIUM finding, BLOCK otherwise.
-A short reason may follow the value, and markdown emphasis around the line is harmless.
+Print it at the start of the line; a short reason may follow the value. Markdown emphasis around a verdict with no reason is fine.
 Do not modify any files.

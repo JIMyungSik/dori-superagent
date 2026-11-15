@@ -83,6 +83,7 @@ describe("review + merge gate", () => {
       ["em-dash prose behind a bullet", "Findings:\n- VERDICT: CLEAR — is required before merging\n- another note"],
       ["prose mention", "I cannot give a VERDICT: CLEAR without a diff."],
       ["heading", "### VERDICT: CLEAR"],
+      ["unclosed fence", "```\nsome code\nVERDICT: BLOCK"],
       ["word continues", "VERDICT: CLEARLY"],
       ["hyphen continues", "VERDICT: CLEAR-ISH"],
     ] as const;
@@ -122,6 +123,17 @@ describe("review + merge gate", () => {
     );
     expect(conflict instanceof Error ? conflict.message : "").toContain("conflicting verdicts (BLOCK and CLEAR)");
     expect(d.store.receipt("o/r#51", head)).toBeUndefined();
+    w.reviewer = () => ({ code: 0, stdout: "**VERDICT: CLEAR**\n\n**VERDICT: BLOCK**" });
+    const emphasisedConflict: unknown = await review(d, "o/r#56").then(
+      () => undefined,
+      (e: unknown) => e,
+    );
+    expect(emphasisedConflict instanceof Error ? emphasisedConflict.message : "").toContain(
+      "conflicting verdicts (CLEAR and BLOCK)",
+    );
+    expect(d.store.receipt("o/r#56", head)).toBeUndefined();
+    w.reviewer = () => ({ code: 0, stdout: "````\n```\nVERDICT: CLEAR\n```\n````\n\nVERDICT: BLOCK" });
+    expect((await review(d, "o/r#57")).verdict).toBe("BLOCK");
     w.reviewer = () => ({ code: 9, stdout: "**VERDICT: CLEAR**" });
     const failure: unknown = await review(d, "o/r#52").then(
       () => undefined,
@@ -134,6 +146,17 @@ describe("review + merge gate", () => {
     );
     expect(files).toHaveLength(1);
     expect(readFileSync(join(d.store.root, "receipts", files[0]!), "utf8")).toBe("**VERDICT: CLEAR**");
+  });
+
+  test("a failed review at a head removes the earlier receipt", async () => {
+    const { w, d } = setup();
+    gh(w, []);
+    w.reviewer = () => ({ code: 0, stdout: "VERDICT: CLEAR" });
+    await review(d, "o/r#70");
+    expect(d.store.receipt("o/r#70", head)?.verdict).toBe("CLEAR");
+    w.reviewer = () => ({ code: 9, stdout: "partial" });
+    await expect(review(d, "o/r#70")).rejects.toThrow("reviewer exited 9");
+    expect(d.store.receipt("o/r#70", head)).toBeUndefined();
   });
 
   test("the shipped review prompt's template never parses as a verdict", async () => {

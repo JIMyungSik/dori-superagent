@@ -170,7 +170,7 @@ lead 是唯一和你说话的会话（`prompts/lead.md`）。lane 规则把每�
 
 ### merge 需要精确 head 上的 CLEAR receipt 和全绿的检查
 
-`dori merge` 用 `gh` 读取 PR 的 head SHA，然后要求 `~/.dori/receipts/` 中有一份针对该 SHA、结论为 `CLEAR` 的 receipt。只有 `dori review` 会写 receipt：它基于 `prompts/review.md` 运行一个全新的非交互式 omo，固定在该 SHA 上；如果 reviewer 没有打印以行首开始的 `VERDICT: CLEAR` 或 `VERDICT: BLOCK` 行（允许行尾附简短理由），也没有打印同样内容、仅被 markdown 强调或反引号包裹的整行，就不写 receipt。缩进、项目符号、引用块与围栏示例都不算；纯文本行与强调行相互冲突时不写 receipt。
+`dori merge` 用 `gh` 读取 PR 的 head SHA，然后要求 `~/.dori/receipts/` 中有一份针对该 SHA、结论为 `CLEAR` 的 receipt。只有 `dori review` 会写 receipt：它基于 `prompts/review.md` 运行一个全新的非交互式 omo，固定在该 SHA 上；如果 reviewer 没有打印以行首开始的 `VERDICT: CLEAR` 或 `VERDICT: BLOCK` 行（允许行尾附简短理由），也没有打印同样内容、仅被 markdown 强调或反引号包裹的整行，就不写 receipt。缩进、项目符号、引用块与围栏示例都不算；纯文本行与强调行相互冲突时不写 receipt。同一 head 上的评审失败时，会删除该 head 先前的 receipt。
 
 接着 `gh pr checks` 必须返回至少一个检查，每个检查都必须是 `pass` 或 `skipping`，且至少一个是 `pass`。空的检查列表会被拒绝，理由是 "an empty check list is never green"。review 之后的 push 会改变 head SHA，receipt 就不再匹配，`dori review` 需要重新运行。
 
